@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>javscan report</title>
+<style>
+:root { --bg:#0f1117; --panel:#171a23; --border:#262b38; --text:#e2e6ef; --dim:#8b93a7;
+  --critical:#ff4d5e; --high:#ff8a3d; --medium:#ffd23d; --low:#3dc9ff; --info:#9aa4b8; --accent:#7c6cff; }
+* { box-sizing:border-box; margin:0; }
+body { background:var(--bg); color:var(--text); font:14px/1.5 "Segoe UI",system-ui,sans-serif; padding:32px; }
+h1 { font-size:22px; } h1 span { color:var(--accent); }
+.sub { color:var(--dim); margin:4px 0 24px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:24px; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+.card .num { font-size:28px; font-weight:700; }
+.card .lbl { color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+.card.critical .num { color:var(--critical); } .card.high .num { color:var(--high); }
+.card.medium .num { color:var(--medium); } .card.low .num { color:var(--low); }
+.panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:20px; margin-bottom:24px; }
+.panel h2 { font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); margin-bottom:14px; }
+.rulebar { display:flex; align-items:center; gap:10px; margin:6px 0; }
+.rulename { width:280px; font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.track { flex:1; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+.fill { height:100%; background:linear-gradient(90deg,var(--accent),#b18cff); border-radius:4px; }
+.rulecount { width:40px; text-align:right; color:var(--dim); font-size:13px; }
+.controls { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.controls button { background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 14px; cursor:pointer; font-size:13px; }
+.controls button.active { border-color:var(--accent); background:rgba(124,108,255,.15); }
+.controls input { flex:1; min-width:220px; background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 12px; }
+table { width:100%; border-collapse:collapse; }
+th { text-align:left; color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.06em; padding:8px 10px; border-bottom:1px solid var(--border); }
+td { padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+tr.finding { cursor:pointer; } tr.finding:hover { background:rgba(124,108,255,.06); }
+.badge { font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; }
+.badge.CRITICAL { background:rgba(255,77,94,.15); color:var(--critical); }
+.badge.HIGH { background:rgba(255,138,61,.15); color:var(--high); }
+.badge.MEDIUM { background:rgba(255,210,61,.15); color:var(--medium); }
+.badge.LOW { background:rgba(61,201,255,.15); color:var(--low); }
+.badge.INFO { background:rgba(154,164,184,.15); color:var(--info); }
+.mono { font-family:Consolas,monospace; font-size:12.5px; }
+.file { color:var(--dim); } .conf { color:var(--dim); }
+tr.detail { display:none; } tr.detail.open { display:table-row; }
+.detailbox { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; }
+.detailbox pre { background:#0a0c10; border-radius:6px; padding:10px; margin:10px 0; overflow-x:auto; font-size:12.5px; color:#c8d1e0; }
+.detailbox .meta { color:var(--dim); font-size:12.5px; }
+.detailbox .fix { margin-top:8px; color:#a8e6b0; font-size:13px; }
+.empty { text-align:center; padding:40px; color:var(--dim); }
+</style></head><body>
+<h1>jav<span>scan</span> security report</h1>
+<p class="sub">Generated 2026-07-21 00:50:15 · 5 files · 317 lines · 11 ms · javscan v0.1.0</p>
+<div class="cards">
+<div class="card"><div class="num">42</div><div class="lbl">Total</div></div>
+<div class="card critical"><div class="num">11</div><div class="lbl">Critical</div></div>
+<div class="card high"><div class="num">25</div><div class="lbl">High</div></div>
+<div class="card medium"><div class="num">5</div><div class="lbl">Medium</div></div>
+<div class="card low"><div class="num">1</div><div class="lbl">Low / Info</div></div>
+</div>
+<div class="panel"><h2>Findings by rule</h2><div class="rulebar"><span class="rulename">JS101 sql-injection</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS102 command-injection</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS103 ldap-injection</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS104 xpath-injection</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS105 spel-injection</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS106 script-engine-injection</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS201 cross-site-scripting</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS202 open-redirect</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS203 ssrf</span><div class="track"><div class="fill" style="width:4%"></div></div><span class="rulecount">2</span></div><div class="rulebar"><span class="rulename">JS204 insecure-cookie</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS205 csrf-disabled</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS206 permissive-cors</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS207 cleartext-http</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS301 weak-hash</span><div class="track"><div class="fill" style="width:4%"></div></div><span class="rulecount">2</span></div><div class="rulebar"><span class="rulename">JS302 weak-cipher</span><div class="track"><div class="fill" style="width:4%"></div></div><span class="rulecount">2</span></div><div class="rulebar"><span class="rulename">JS303 weak-random</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS304 hardcoded-crypto-material</span><div class="track"><div class="fill" style="width:4%"></div></div><span class="rulecount">2</span></div><div class="rulebar"><span class="rulename">JS305 trust-all-tls</span><div class="track"><div class="fill" style="width:7%"></div></div><span class="rulecount">3</span></div><div class="rulebar"><span class="rulename">JS306 weak-key-size</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS401 hardcoded-secret</span><div class="track"><div class="fill" style="width:9%"></div></div><span class="rulecount">4</span></div><div class="rulebar"><span class="rulename">JS402 jwt-weak-signing</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS501 insecure-deserialization</span><div class="track"><div class="fill" style="width:11%"></div></div><span class="rulecount">5</span></div><div class="rulebar"><span class="rulename">JS502 xxe</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS601 path-traversal</span><div class="track"><div class="fill" style="width:7%"></div></div><span class="rulecount">3</span></div><div class="rulebar"><span class="rulename">JS602 zip-slip</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS701 redos</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div><div class="rulebar"><span class="rulename">JS702 unsafe-reflection</span><div class="track"><div class="fill" style="width:2%"></div></div><span class="rulecount">1</span></div></div>
+<div class="panel">
+<h2>Findings</h2>
+<div class="controls">
+<button class="active" data-f="ALL" onclick="filt(this)">All</button>
+<button data-f="CRITICAL" onclick="filt(this)">Critical</button>
+<button data-f="HIGH" onclick="filt(this)">High</button>
+<button data-f="MEDIUM" onclick="filt(this)">Medium</button>
+<button data-f="LOW" onclick="filt(this)">Low</button>
+<input id="q" placeholder="Search rule, file, message..." oninput="search()">
+</div>
+<table><thead><tr><th>Severity</th><th>Rule</th><th>Name</th><th>Location</th><th>Confidence</th></tr></thead>
+<tbody id="tb"><tr class="finding" data-sev="CRITICAL" data-text="js105 spel-injection examples/vulnerable/apiendpoints.java user-controlled data is parsed as a spel expression; this allows remote code execution." onclick="toggle(0)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS105</td>
+<td>spel-injection</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:44</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d0" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data is parsed as a SpEL expression; this allows remote code execution.</p>
+<pre>return parser.parseExpression(expr).getValue();</pre>
+<p class="meta"><b>CWE-917</b> · A03:2021-Injection · fingerprint <span class="mono">f13bd85ce596844c</span></p>
+<p class="fix"><b>Fix:</b> Never parse user input as SpEL. If unavoidable, use SimpleEvaluationContext instead of StandardEvaluationContext.</p>
+</div></td></tr><tr class="finding" data-sev="CRITICAL" data-text="js106 script-engine-injection examples/vulnerable/apiendpoints.java user-controlled data reaches `scriptengine.eval()`; this is code injection." onclick="toggle(1)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS106</td>
+<td>script-engine-injection</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:50</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d1" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data reaches `ScriptEngine.eval()`; this is code injection.</p>
+<pre>return engine.eval(script);</pre>
+<p class="meta"><b>CWE-94</b> · A03:2021-Injection · fingerprint <span class="mono">a25b710c07f5af5f</span></p>
+<p class="fix"><b>Fix:</b> Do not eval user input. If scripting is required, use a sandboxed engine (e.g. GraalJS with restricted Context) and an allow-list.</p>
+</div></td></tr><tr class="finding" data-sev="CRITICAL" data-text="js501 insecure-deserialization examples/vulnerable/apiendpoints.java snakeyaml `load()` without safeconstructor can instantiate arbitrary classes (rce)." onclick="toggle(2)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS501</td>
+<td>insecure-deserialization</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:62</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d2" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>SnakeYAML `load()` without SafeConstructor can instantiate arbitrary classes (RCE).</p>
+<pre>return yaml.load(body);</pre>
+<p class="meta"><b>CWE-502</b> · A08:2021-Software and Data Integrity Failures · fingerprint <span class="mono">d7e6d8543b8d5db6</span></p>
+<p class="fix"><b>Fix:</b> Never deserialize untrusted bytes. Use an ObjectInputFilter allow-list, SnakeYAML SafeConstructor, XStream allow-list security framework, and avoid Jackson default typing.</p>
+</div></td></tr><tr class="finding" data-sev="CRITICAL" data-text="js501 insecure-deserialization examples/vulnerable/apiendpoints.java `xmldecoder` executes method calls described in the xml; never use it on untrusted input." onclick="toggle(3)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS501</td>
+<td>insecure-deserialization</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:67</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d3" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>`XMLDecoder` executes method calls described in the XML; never use it on untrusted input.</p>
+<pre>XMLDecoder decoder = new XMLDecoder(new FileInputStream(path));</pre>
+<p class="meta"><b>CWE-502</b> · A08:2021-Software and Data Integrity Failures · fingerprint <span class="mono">6b459d211c578daa</span></p>
+<p class="fix"><b>Fix:</b> Never deserialize untrusted bytes. Use an ObjectInputFilter allow-list, SnakeYAML SafeConstructor, XStream allow-list security framework, and avoid Jackson default typing.</p>
+</div></td></tr><tr class="finding" data-sev="CRITICAL" data-text="js305 trust-all-tls examples/vulnerable/cryptoservice.java `checkclienttrusted` has an empty body — every certificate is accepted (tls mitm possible)." onclick="toggle(4)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS305</td>
+<td>trust-all-tls</td>
+<td class="mono file">examples/vulnerable/CryptoService.java:48</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d4" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>`checkClientTrusted` has an empty body — every certificate is accepted (TLS MITM possible).</p>
+<pre>public void checkClientTrusted(X509Certificate[] chain, String authType) {</pre>
+<p class="meta"><b>CWE-295</b> · A07:2021-Identification and Authentication Failures · fingerprint <span class="mono">83181b7046cee11f</span></p>
+<p class="fix"><b>Fix:</b> Never install trust-all TrustManagers or hostname verifiers. Use the platform trust store, or pin the specific certificate.</p>
+</div></td></tr><tr class="finding" data-sev="CRITICAL" data-text="js305 trust-all-tls examples/vulnerable/cryptoservice.java `checkservertrusted` has an empty body — every certificate is accepted (tls mitm possible)." onclick="toggle(5)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS305</td>
+<td>trust-all-tls</td>
+<td class="mono file">examples/vulnerable/CryptoService.java:51</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d5" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>`checkServerTrusted` has an empty body — every certificate is accepted (TLS MITM possible).</p>
+<pre>public void checkServerTrusted(X509Certificate[] chain, String authType) {</pre>
+<p class="meta"><b>CWE-295</b> · A07:2021-Identification and Authentication Failures · fingerprint <span class="mono">4fc2d86959d62bcb</span></p>
+<p class="fix"><b>Fix:</b> Never install trust-all TrustManagers or hostname verifiers. Use the platform trust store, or pin the specific certificate.</p>
+</div></td></tr><tr class="finding" data-sev="CRITICAL" data-text="js305 trust-all-tls examples/vulnerable/cryptoservice.java hostname verification disabled via a trust-all hostnameverifier." onclick="toggle(6)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS305</td>
+<td>trust-all-tls</td>
+<td class="mono file">examples/vulnerable/CryptoService.java:61</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d6" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>Hostname verification disabled via a trust-all HostnameVerifier.</p>
+<pre>HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -&gt; true);</pre>
+<p class="meta"><b>CWE-295</b> · A07:2021-Identification and Authentication Failures · fingerprint <span class="mono">f6678157248f293a</span></p>
+<p class="fix"><b>Fix:</b> Never install trust-all TrustManagers or hostname verifiers. Use the platform trust store, or pin the specific certificate.</p>
+</div></td></tr><tr class="finding" data-sev="CRITICAL" data-text="js501 insecure-deserialization examples/vulnerable/securityconfig.java jackson `enabledefaulttyping()` enables polymorphic deserialization of arbitrary classes (rce via gadget types)." onclick="toggle(7)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS501</td>
+<td>insecure-deserialization</td>
+<td class="mono file">examples/vulnerable/SecurityConfig.java:31</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d7" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>Jackson `enableDefaultTyping()` enables polymorphic deserialization of arbitrary classes (RCE via gadget types).</p>
+<pre>om.enableDefaultTyping();</pre>
+<p class="meta"><b>CWE-502</b> · A08:2021-Software and Data Integrity Failures · fingerprint <span class="mono">0f0a8d43dcf93510</span></p>
+<p class="fix"><b>Fix:</b> Never deserialize untrusted bytes. Use an ObjectInputFilter allow-list, SnakeYAML SafeConstructor, XStream allow-list security framework, and avoid Jackson default typing.</p>
+</div></td></tr><tr class="finding" data-sev="CRITICAL" data-text="js401 hardcoded-secret examples/vulnerable/usercontroller.java string literal contains aws access key id." onclick="toggle(8)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS401</td>
+<td>hardcoded-secret</td>
+<td class="mono file">examples/vulnerable/UserController.java:19</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d8" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>String literal contains AWS access key ID.</p>
+<pre>private String apiKey = &quot;AKIAIOSFODNN7EXAMPLE0&quot;;</pre>
+<p class="meta"><b>CWE-798</b> · A07:2021-Identification and Authentication Failures · fingerprint <span class="mono">3e58930b222d8f55</span></p>
+<p class="fix"><b>Fix:</b> Load secrets from environment variables, a vault (HashiCorp Vault, AWS Secrets Manager), or encrypted configuration — never from source code.</p>
+</div></td></tr><tr class="finding" data-sev="CRITICAL" data-text="js101 sql-injection examples/vulnerable/usercontroller.java user-controlled data reaches sql sink `executequery()`; the query is attacker-influenced." onclick="toggle(9)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS101</td>
+<td>sql-injection</td>
+<td class="mono file">examples/vulnerable/UserController.java:32</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d9" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data reaches SQL sink `executeQuery()`; the query is attacker-influenced.</p>
+<pre>stmt.executeQuery(query);</pre>
+<p class="meta"><b>CWE-89</b> · A03:2021-Injection · fingerprint <span class="mono">a1ee60edf6d4ff53</span></p>
+<p class="fix"><b>Fix:</b> Use PreparedStatement with parameterized placeholders (?) and bind values with setString/setInt; never concatenate input into SQL.</p>
+</div></td></tr><tr class="finding" data-sev="CRITICAL" data-text="js102 command-injection examples/vulnerable/usercontroller.java user-controlled data reaches `runtime.exec()`; attacker can run arbitrary os commands." onclick="toggle(10)">
+<td><span class="badge CRITICAL">CRITICAL</span></td>
+<td class="mono">JS102</td>
+<td>command-injection</td>
+<td class="mono file">examples/vulnerable/UserController.java:39</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d10" data-sev="CRITICAL"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data reaches `Runtime.exec()`; attacker can run arbitrary OS commands.</p>
+<pre>Runtime.getRuntime().exec(&quot;ping &quot; + request.getParameter(&quot;host&quot;));</pre>
+<p class="meta"><b>CWE-78</b> · A03:2021-Injection · fingerprint <span class="mono">9ac54f0f3486cc25</span></p>
+<p class="fix"><b>Fix:</b> Avoid shelling out with user input. Use ProcessBuilder with a fixed argument list, validate against an allow-list, and never pass input through 'sh -c' or 'cmd /c'.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js103 ldap-injection examples/vulnerable/apiendpoints.java user-controlled data reaches ldap `search()` filter; attacker can alter the filter logic." onclick="toggle(11)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS103</td>
+<td>ldap-injection</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:30</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d11" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data reaches LDAP `search()` filter; attacker can alter the filter logic.</p>
+<pre>ctx.search(&quot;ou=users&quot;, &quot;(uid=&quot; + username + &quot;)&quot;, null);</pre>
+<p class="meta"><b>CWE-90</b> · A03:2021-Injection · fingerprint <span class="mono">00e2a03001960f04</span></p>
+<p class="fix"><b>Fix:</b> Escape LDAP special characters (e.g. OWASP ESAPI encodeForLDAP) or use parameterized LDAP filter APIs.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js104 xpath-injection examples/vulnerable/apiendpoints.java user-controlled data reaches xpath `compile()`; attacker can alter the query." onclick="toggle(12)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS104</td>
+<td>xpath-injection</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:37</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d12" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data reaches XPath `compile()`; attacker can alter the query.</p>
+<pre>xpath.compile(&quot;//user[@id='&quot; + id + &quot;']&quot;);</pre>
+<p class="meta"><b>CWE-643</b> · A03:2021-Injection · fingerprint <span class="mono">789ae94e1e0c2c56</span></p>
+<p class="fix"><b>Fix:</b> Use XPath variable resolvers (XPathVariableResolver) instead of concatenating input into expressions.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js601 path-traversal examples/vulnerable/apiendpoints.java user-controlled data flows into `new fileinputstream(...)`; attacker can reach arbitrary paths (../ traversal)." onclick="toggle(13)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS601</td>
+<td>path-traversal</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:55</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d13" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data flows into `new FileInputStream(...)`; attacker can reach arbitrary paths (../ traversal).</p>
+<pre>ObjectInputStream ois = new ObjectInputStream(new FileInputStream(path));</pre>
+<p class="meta"><b>CWE-22</b> · A01:2021-Broken Access Control · fingerprint <span class="mono">c32b4abfa6c5144e</span></p>
+<p class="fix"><b>Fix:</b> Canonicalize with path.normalize()/getCanonicalPath() and verify the result stays under the intended base directory; or map user input to server-chosen file names.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js501 insecure-deserialization examples/vulnerable/apiendpoints.java `ois.readobject()` deserializes java objects; crafted streams can execute arbitrary code (gadget chains)." onclick="toggle(14)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS501</td>
+<td>insecure-deserialization</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:56</td>
+<td class="mono conf">medium</td>
+</tr>
+<tr class="detail" id="d14" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>`ois.readObject()` deserializes Java objects; crafted streams can execute arbitrary code (gadget chains).</p>
+<pre>return ois.readObject();</pre>
+<p class="meta"><b>CWE-502</b> · A08:2021-Software and Data Integrity Failures · fingerprint <span class="mono">5a6ba85dcfbeac8f</span></p>
+<p class="fix"><b>Fix:</b> Never deserialize untrusted bytes. Use an ObjectInputFilter allow-list, SnakeYAML SafeConstructor, XStream allow-list security framework, and avoid Jackson default typing.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js601 path-traversal examples/vulnerable/apiendpoints.java user-controlled data flows into `new fileinputstream(...)`; attacker can reach arbitrary paths (../ traversal)." onclick="toggle(15)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS601</td>
+<td>path-traversal</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:67</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d15" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data flows into `new FileInputStream(...)`; attacker can reach arbitrary paths (../ traversal).</p>
+<pre>XMLDecoder decoder = new XMLDecoder(new FileInputStream(path));</pre>
+<p class="meta"><b>CWE-22</b> · A01:2021-Broken Access Control · fingerprint <span class="mono">fd396909c4d37b7f</span></p>
+<p class="fix"><b>Fix:</b> Canonicalize with path.normalize()/getCanonicalPath() and verify the result stays under the intended base directory; or map user input to server-chosen file names.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js501 insecure-deserialization examples/vulnerable/apiendpoints.java `decoder.readobject()` deserializes java objects; crafted streams can execute arbitrary code (gadget chains)." onclick="toggle(16)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS501</td>
+<td>insecure-deserialization</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:68</td>
+<td class="mono conf">medium</td>
+</tr>
+<tr class="detail" id="d16" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>`decoder.readObject()` deserializes Java objects; crafted streams can execute arbitrary code (gadget chains).</p>
+<pre>return decoder.readObject();</pre>
+<p class="meta"><b>CWE-502</b> · A08:2021-Software and Data Integrity Failures · fingerprint <span class="mono">d2b4ff189e130e72</span></p>
+<p class="fix"><b>Fix:</b> Never deserialize untrusted bytes. Use an ObjectInputFilter allow-list, SnakeYAML SafeConstructor, XStream allow-list security framework, and avoid Jackson default typing.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js502 xxe examples/vulnerable/apiendpoints.java `documentbuilderfactory.newinstance()` created without disabling dtds/external entities — xxe possible when parsing untrusted xml." onclick="toggle(17)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS502</td>
+<td>xxe</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:73</td>
+<td class="mono conf">medium</td>
+</tr>
+<tr class="detail" id="d17" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>`DocumentBuilderFactory.newInstance()` created without disabling DTDs/external entities — XXE possible when parsing untrusted XML.</p>
+<pre>DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();</pre>
+<p class="meta"><b>CWE-611</b> · A05:2021-Security Misconfiguration · fingerprint <span class="mono">acbf308b657cf55c</span></p>
+<p class="fix"><b>Fix:</b> Set factory.setFeature(&quot;http://apache.org/xml/features/disallow-doctype-decl&quot;, true) and disable external entities/DTDs before parsing untrusted XML.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js702 unsafe-reflection examples/vulnerable/apiendpoints.java user-controlled class name passed to `forname()`; attacker can instantiate arbitrary classes." onclick="toggle(18)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS702</td>
+<td>unsafe-reflection</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:79</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d18" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled class name passed to `forName()`; attacker can instantiate arbitrary classes.</p>
+<pre>return Class.forName(className).getDeclaredConstructor().newInstance();</pre>
+<p class="meta"><b>CWE-470</b> · A03:2021-Injection · fingerprint <span class="mono">efbbf5c764db7120</span></p>
+<p class="fix"><b>Fix:</b> Map user input to an allow-list of permitted class names instead of passing it to Class.forName/loadClass.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js602 zip-slip examples/vulnerable/apiendpoints.java archive entry name used in `new file(...)` without a containment check — entries named `../../evil` escape the target directory." onclick="toggle(19)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS602</td>
+<td>zip-slip</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:90</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d19" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>Archive entry name used in `new File(...)` without a containment check — entries named `../../evil` escape the target directory.</p>
+<pre>File dest = new File(targetDir, entry.getName());</pre>
+<p class="meta"><b>CWE-22</b> · A01:2021-Broken Access Control · fingerprint <span class="mono">3e6864d675552d3a</span></p>
+<p class="fix"><b>Fix:</b> After resolving entry paths, verify destPath.normalize().startsWith(targetDir) before writing each entry.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js301 weak-hash examples/vulnerable/cryptoservice.java weak hash algorithm `md5` — collision attacks are practical." onclick="toggle(20)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS301</td>
+<td>weak-hash</td>
+<td class="mono file">examples/vulnerable/CryptoService.java:16</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d20" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>Weak hash algorithm `MD5` — collision attacks are practical.</p>
+<pre>MessageDigest md = MessageDigest.getInstance(&quot;MD5&quot;);</pre>
+<p class="meta"><b>CWE-328</b> · A02:2021-Cryptographic Failures · fingerprint <span class="mono">e94b9252b6044664</span></p>
+<p class="fix"><b>Fix:</b> Use SHA-256 or stronger for integrity; use bcrypt/scrypt/Argon2 (e.g. Spring Security PasswordEncoder) for passwords.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js301 weak-hash examples/vulnerable/cryptoservice.java weak hash algorithm `sha-1` — collision attacks are practical." onclick="toggle(21)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS301</td>
+<td>weak-hash</td>
+<td class="mono file">examples/vulnerable/CryptoService.java:21</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d21" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>Weak hash algorithm `SHA-1` — collision attacks are practical.</p>
+<pre>MessageDigest md = MessageDigest.getInstance(&quot;SHA-1&quot;);</pre>
+<p class="meta"><b>CWE-328</b> · A02:2021-Cryptographic Failures · fingerprint <span class="mono">b86699b9efc4100c</span></p>
+<p class="fix"><b>Fix:</b> Use SHA-256 or stronger for integrity; use bcrypt/scrypt/Argon2 (e.g. Spring Security PasswordEncoder) for passwords.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js302 weak-cipher examples/vulnerable/cryptoservice.java weak cipher `des/ecb/pkcs5padding` — algorithm is broken or has inadequate key/block size." onclick="toggle(22)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS302</td>
+<td>weak-cipher</td>
+<td class="mono file">examples/vulnerable/CryptoService.java:26</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d22" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>Weak cipher `DES/ECB/PKCS5Padding` — algorithm is broken or has inadequate key/block size.</p>
+<pre>return Cipher.getInstance(&quot;DES/ECB/PKCS5Padding&quot;);</pre>
+<p class="meta"><b>CWE-327</b> · A02:2021-Cryptographic Failures · fingerprint <span class="mono">07ddeacff709ece3</span></p>
+<p class="fix"><b>Fix:</b> Use AES/GCM/NoPadding with a random 12-byte nonce per encryption (or ChaCha20-Poly1305).</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js302 weak-cipher examples/vulnerable/cryptoservice.java `cipher.getinstance(&quot;aes&quot;)` defaults to ecb mode on most providers; specify aes/gcm/nopadding." onclick="toggle(23)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS302</td>
+<td>weak-cipher</td>
+<td class="mono file">examples/vulnerable/CryptoService.java:30</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d23" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>`Cipher.getInstance(&quot;AES&quot;)` defaults to ECB mode on most providers; specify AES/GCM/NoPadding.</p>
+<pre>return Cipher.getInstance(&quot;AES&quot;);</pre>
+<p class="meta"><b>CWE-327</b> · A02:2021-Cryptographic Failures · fingerprint <span class="mono">e3277142c2456fd5</span></p>
+<p class="fix"><b>Fix:</b> Use AES/GCM/NoPadding with a random 12-byte nonce per encryption (or ChaCha20-Poly1305).</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js304 hardcoded-crypto-material examples/vulnerable/cryptoservice.java hardcoded key passed to `new secretkeyspec(...)`; anyone with the binary can decrypt." onclick="toggle(24)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS304</td>
+<td>hardcoded-crypto-material</td>
+<td class="mono file">examples/vulnerable/CryptoService.java:34</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d24" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>Hardcoded key passed to `new SecretKeySpec(...)`; anyone with the binary can decrypt.</p>
+<pre>return new SecretKeySpec(&quot;1234567890123456&quot;.getBytes(), &quot;AES&quot;);</pre>
+<p class="meta"><b>CWE-321</b> · A02:2021-Cryptographic Failures · fingerprint <span class="mono">30f709d3cf6f6f6f</span></p>
+<p class="fix"><b>Fix:</b> Load keys from a secrets manager or KeyStore; generate IVs randomly per operation (SecureRandom).</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js304 hardcoded-crypto-material examples/vulnerable/cryptoservice.java hardcoded iv/nonce passed to `new ivparameterspec(...)`; anyone with the binary can decrypt." onclick="toggle(25)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS304</td>
+<td>hardcoded-crypto-material</td>
+<td class="mono file">examples/vulnerable/CryptoService.java:38</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d25" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>Hardcoded IV/nonce passed to `new IvParameterSpec(...)`; anyone with the binary can decrypt.</p>
+<pre>return new IvParameterSpec(&quot;0000000000000000&quot;.getBytes());</pre>
+<p class="meta"><b>CWE-321</b> · A02:2021-Cryptographic Failures · fingerprint <span class="mono">4b4925860cf77341</span></p>
+<p class="fix"><b>Fix:</b> Load keys from a secrets manager or KeyStore; generate IVs randomly per operation (SecureRandom).</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js401 hardcoded-secret examples/vulnerable/securityconfig.java hardcoded credential assigned to `jwt_secret`." onclick="toggle(26)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS401</td>
+<td>hardcoded-secret</td>
+<td class="mono file">examples/vulnerable/SecurityConfig.java:14</td>
+<td class="mono conf">medium</td>
+</tr>
+<tr class="detail" id="d26" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>Hardcoded credential assigned to `JWT_SECRET`.</p>
+<pre>private static final String JWT_SECRET = &quot;my-jwt-signing-secret-key-2024&quot;;</pre>
+<p class="meta"><b>CWE-798</b> · A07:2021-Identification and Authentication Failures · fingerprint <span class="mono">25b09dc20acf3654</span></p>
+<p class="fix"><b>Fix:</b> Load secrets from environment variables, a vault (HashiCorp Vault, AWS Secrets Manager), or encrypted configuration — never from source code.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js205 csrf-disabled examples/vulnerable/securityconfig.java spring security csrf protection is disabled (`.csrf().disable()`)." onclick="toggle(27)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS205</td>
+<td>csrf-disabled</td>
+<td class="mono file">examples/vulnerable/SecurityConfig.java:18</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d27" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>Spring Security CSRF protection is disabled (`.csrf().disable()`).</p>
+<pre>http.csrf().disable();</pre>
+<p class="meta"><b>CWE-352</b> · A01:2021-Broken Access Control · fingerprint <span class="mono">d3f06b11e6557d6d</span></p>
+<p class="fix"><b>Fix:</b> Keep CSRF protection enabled for browser-facing endpoints; only disable it for stateless token-authenticated APIs, and document why.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js402 jwt-weak-signing examples/vulnerable/securityconfig.java jwt `signwith()` uses a hardcoded string secret; tokens can be forged by anyone with the source." onclick="toggle(28)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS402</td>
+<td>jwt-weak-signing</td>
+<td class="mono file">examples/vulnerable/SecurityConfig.java:23</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d28" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>JWT `signWith()` uses a hardcoded string secret; tokens can be forged by anyone with the source.</p>
+<pre>return Jwts.builder()</pre>
+<p class="meta"><b>CWE-347</b> · A02:2021-Cryptographic Failures · fingerprint <span class="mono">0bc4c01858a336af</span></p>
+<p class="fix"><b>Fix:</b> Load JWT keys from secure configuration, use strong random secrets (&gt;= 256 bits) or asymmetric keys, and never accept the 'none' algorithm.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js401 hardcoded-secret examples/vulnerable/usercontroller.java hardcoded credential assigned to `db_password`." onclick="toggle(29)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS401</td>
+<td>hardcoded-secret</td>
+<td class="mono file">examples/vulnerable/UserController.java:18</td>
+<td class="mono conf">medium</td>
+</tr>
+<tr class="detail" id="d29" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>Hardcoded credential assigned to `DB_PASSWORD`.</p>
+<pre>private static final String DB_PASSWORD = &quot;SuperS3cretPass!&quot;;</pre>
+<p class="meta"><b>CWE-798</b> · A07:2021-Identification and Authentication Failures · fingerprint <span class="mono">da2d9fdb47dd6dc6</span></p>
+<p class="fix"><b>Fix:</b> Load secrets from environment variables, a vault (HashiCorp Vault, AWS Secrets Manager), or encrypted configuration — never from source code.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js401 hardcoded-secret examples/vulnerable/usercontroller.java database password hardcoded in `drivermanager.getconnection(...)`." onclick="toggle(30)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS401</td>
+<td>hardcoded-secret</td>
+<td class="mono file">examples/vulnerable/UserController.java:28</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d30" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>Database password hardcoded in `DriverManager.getConnection(...)`.</p>
+<pre>Connection conn = DriverManager.getConnection(</pre>
+<p class="meta"><b>CWE-798</b> · A07:2021-Identification and Authentication Failures · fingerprint <span class="mono">873c32b12f799e01</span></p>
+<p class="fix"><b>Fix:</b> Load secrets from environment variables, a vault (HashiCorp Vault, AWS Secrets Manager), or encrypted configuration — never from source code.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js201 cross-site-scripting examples/vulnerable/usercontroller.java user-controlled data written to the http response without html encoding (reflected xss)." onclick="toggle(31)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS201</td>
+<td>cross-site-scripting</td>
+<td class="mono file">examples/vulnerable/UserController.java:45</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d31" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data written to the HTTP response without HTML encoding (reflected XSS).</p>
+<pre>out.println(&quot;&lt;h1&gt;Hello &quot; + name + &quot;&lt;/h1&gt;&quot;);</pre>
+<p class="meta"><b>CWE-79</b> · A03:2021-Injection · fingerprint <span class="mono">57b816c573595582</span></p>
+<p class="fix"><b>Fix:</b> HTML-encode output with OWASP Java Encoder (Encode.forHtml) or a templating engine with auto-escaping; never write raw request data to the response.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js601 path-traversal examples/vulnerable/usercontroller.java user-controlled data flows into `new file(...)`; attacker can reach arbitrary paths (../ traversal)." onclick="toggle(32)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS601</td>
+<td>path-traversal</td>
+<td class="mono file">examples/vulnerable/UserController.java:51</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d32" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data flows into `new File(...)`; attacker can reach arbitrary paths (../ traversal).</p>
+<pre>File f = new File(&quot;/var/data/&quot; + request.getParameter(&quot;file&quot;));</pre>
+<p class="meta"><b>CWE-22</b> · A01:2021-Broken Access Control · fingerprint <span class="mono">5a69c7c462ed8666</span></p>
+<p class="fix"><b>Fix:</b> Canonicalize with path.normalize()/getCanonicalPath() and verify the result stays under the intended base directory; or map user input to server-chosen file names.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js203 ssrf examples/vulnerable/usercontroller.java user-controlled data flows into `new url(...)` used for server-side requests (ssrf)." onclick="toggle(33)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS203</td>
+<td>ssrf</td>
+<td class="mono file">examples/vulnerable/UserController.java:54</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d33" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>User-controlled data flows into `new URL(...)` used for server-side requests (SSRF).</p>
+<pre>URL url = new URL(request.getParameter(&quot;callback&quot;));</pre>
+<p class="meta"><b>CWE-918</b> · A10:2021-SSRF · fingerprint <span class="mono">3356ecd9b76c2fa9</span></p>
+<p class="fix"><b>Fix:</b> Validate URLs against an allow-list of hosts/schemes, resolve and check the IP is not internal, and disable redirects.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js203 ssrf examples/vulnerable/usercontroller.java `openconnection()` invoked on a url derived from user input (ssrf)." onclick="toggle(34)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS203</td>
+<td>ssrf</td>
+<td class="mono file">examples/vulnerable/UserController.java:55</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d34" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>`openConnection()` invoked on a URL derived from user input (SSRF).</p>
+<pre>url.openConnection();</pre>
+<p class="meta"><b>CWE-918</b> · A10:2021-SSRF · fingerprint <span class="mono">bbf3d96032b0a1a2</span></p>
+<p class="fix"><b>Fix:</b> Validate URLs against an allow-list of hosts/schemes, resolve and check the IP is not internal, and disable redirects.</p>
+</div></td></tr><tr class="finding" data-sev="HIGH" data-text="js303 weak-random examples/vulnerable/usercontroller.java `new random()` is predictable in a security-sensitive context (token/secret/session generation); use securerandom for anything security-relevant." onclick="toggle(35)">
+<td><span class="badge HIGH">HIGH</span></td>
+<td class="mono">JS303</td>
+<td>weak-random</td>
+<td class="mono file">examples/vulnerable/UserController.java:58</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d35" data-sev="HIGH"><td colspan="5">
+<div class="detailbox">
+<p>`new Random()` is predictable in a security-sensitive context (token/secret/session generation); use SecureRandom for anything security-relevant.</p>
+<pre>Random random = new Random();</pre>
+<p class="meta"><b>CWE-330</b> · A02:2021-Cryptographic Failures · fingerprint <span class="mono">0a2a8b18f10f8744</span></p>
+<p class="fix"><b>Fix:</b> Use java.security.SecureRandom for tokens, session IDs, keys, salts, OTPs, or any security decision.</p>
+</div></td></tr><tr class="finding" data-sev="MEDIUM" data-text="js701 redos examples/vulnerable/apiendpoints.java regex `^(a+)+$` has nested quantifiers; crafted input can cause exponential backtracking." onclick="toggle(36)">
+<td><span class="badge MEDIUM">MEDIUM</span></td>
+<td class="mono">JS701</td>
+<td>redos</td>
+<td class="mono file">examples/vulnerable/ApiEndpoints.java:84</td>
+<td class="mono conf">medium</td>
+</tr>
+<tr class="detail" id="d36" data-sev="MEDIUM"><td colspan="5">
+<div class="detailbox">
+<p>Regex `^(a+)+$` has nested quantifiers; crafted input can cause exponential backtracking.</p>
+<pre>return Pattern.compile(&quot;^(a+)+$&quot;).matcher(input).matches();</pre>
+<p class="meta"><b>CWE-1333</b> · A05:2021-Security Misconfiguration · fingerprint <span class="mono">02d179cf78b84647</span></p>
+<p class="fix"><b>Fix:</b> Rewrite the pattern to avoid nested quantifiers like (a+)+, cap input length before matching, or use a linear-time engine (RE2/j).</p>
+</div></td></tr><tr class="finding" data-sev="MEDIUM" data-text="js306 weak-key-size examples/vulnerable/cryptoservice.java 1024-bit asymmetric key is below modern minimums (rsa &gt;= 2048)." onclick="toggle(37)">
+<td><span class="badge MEDIUM">MEDIUM</span></td>
+<td class="mono">JS306</td>
+<td>weak-key-size</td>
+<td class="mono file">examples/vulnerable/CryptoService.java:43</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d37" data-sev="MEDIUM"><td colspan="5">
+<div class="detailbox">
+<p>1024-bit asymmetric key is below modern minimums (RSA &gt;= 2048).</p>
+<pre>keyGen.initialize(1024);</pre>
+<p class="meta"><b>CWE-326</b> · A02:2021-Cryptographic Failures · fingerprint <span class="mono">8fc4ca40b4c0b994</span></p>
+<p class="fix"><b>Fix:</b> Use RSA &gt;= 2048 bits (3072+ preferred), EC &gt;= 256 bits, AES &gt;= 128 bits.</p>
+</div></td></tr><tr class="finding" data-sev="MEDIUM" data-text="js202 open-redirect examples/vulnerable/usercontroller.java redirect target comes from user-controlled input (open redirect)." onclick="toggle(38)">
+<td><span class="badge MEDIUM">MEDIUM</span></td>
+<td class="mono">JS202</td>
+<td>open-redirect</td>
+<td class="mono file">examples/vulnerable/UserController.java:48</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d38" data-sev="MEDIUM"><td colspan="5">
+<div class="detailbox">
+<p>Redirect target comes from user-controlled input (open redirect).</p>
+<pre>response.sendRedirect(request.getParameter(&quot;next&quot;));</pre>
+<p class="meta"><b>CWE-601</b> · A01:2021-Broken Access Control · fingerprint <span class="mono">0f1220fa70913091</span></p>
+<p class="fix"><b>Fix:</b> Validate redirect targets against an allow-list of internal paths, or use fixed mapping keys instead of raw URLs.</p>
+</div></td></tr><tr class="finding" data-sev="MEDIUM" data-text="js204 insecure-cookie examples/vulnerable/usercontroller.java cookie created without the secure and httponly flag(s)." onclick="toggle(39)">
+<td><span class="badge MEDIUM">MEDIUM</span></td>
+<td class="mono">JS204</td>
+<td>insecure-cookie</td>
+<td class="mono file">examples/vulnerable/UserController.java:62</td>
+<td class="mono conf">medium</td>
+</tr>
+<tr class="detail" id="d39" data-sev="MEDIUM"><td colspan="5">
+<div class="detailbox">
+<p>Cookie created without the Secure and HttpOnly flag(s).</p>
+<pre>Cookie session = new Cookie(&quot;JSESSIONID&quot;, sessionToken);</pre>
+<p class="meta"><b>CWE-614</b> · A05:2021-Security Misconfiguration · fingerprint <span class="mono">0bd4a7803fe4f299</span></p>
+<p class="fix"><b>Fix:</b> Call cookie.setSecure(true) and cookie.setHttpOnly(true) on every session or sensitive cookie.</p>
+</div></td></tr><tr class="finding" data-sev="MEDIUM" data-text="js206 permissive-cors examples/vulnerable/usercontroller.java access-control-allow-origin set to '*' — any website can call this endpoint." onclick="toggle(40)">
+<td><span class="badge MEDIUM">MEDIUM</span></td>
+<td class="mono">JS206</td>
+<td>permissive-cors</td>
+<td class="mono file">examples/vulnerable/UserController.java:66</td>
+<td class="mono conf">high</td>
+</tr>
+<tr class="detail" id="d40" data-sev="MEDIUM"><td colspan="5">
+<div class="detailbox">
+<p>Access-Control-Allow-Origin set to '*' — any website can call this endpoint.</p>
+<pre>response.setHeader(&quot;Access-Control-Allow-Origin&quot;, &quot;*&quot;);</pre>
+<p class="meta"><b>CWE-942</b> · A05:2021-Security Misconfiguration · fingerprint <span class="mono">95388a849cbc5e47</span></p>
+<p class="fix"><b>Fix:</b> List explicit trusted origins instead of '*', especially when credentials are allowed.</p>
+</div></td></tr><tr class="finding" data-sev="LOW" data-text="js207 cleartext-http examples/vulnerable/usercontroller.java cleartext http url `http://payments.internal.example.net/api`; prefer https." onclick="toggle(41)">
+<td><span class="badge LOW">LOW</span></td>
+<td class="mono">JS207</td>
+<td>cleartext-http</td>
+<td class="mono file">examples/vulnerable/UserController.java:69</td>
+<td class="mono conf">medium</td>
+</tr>
+<tr class="detail" id="d41" data-sev="LOW"><td colspan="5">
+<div class="detailbox">
+<p>Cleartext HTTP URL `http://payments.internal.example.net/api`; prefer HTTPS.</p>
+<pre>String endpoint = &quot;http://payments.internal.example.net/api&quot;;</pre>
+<p class="meta"><b>CWE-319</b> · A02:2021-Cryptographic Failures · fingerprint <span class="mono">2e8dd85486064149</span></p>
+<p class="fix"><b>Fix:</b> Use https:// for all external communication; cleartext HTTP exposes data to interception.</p>
+</div></td></tr></tbody></table>
+<div class="empty" id="empty" style="display:none">No findings match the current filter.</div>
+</div>
+<script>
+let sevFilter = "ALL";
+function toggle(i) { document.getElementById("d"+i).classList.toggle("open"); }
+function filt(btn) {
+  sevFilter = btn.dataset.f;
+  document.querySelectorAll(".controls button").forEach(b => b.classList.toggle("active", b===btn));
+  apply();
+}
+function search() { apply(); }
+function apply() {
+  const q = document.getElementById("q").value.toLowerCase();
+  let visible = 0;
+  document.querySelectorAll("tr.finding").forEach(tr => {
+    const okSev = sevFilter === "ALL" || tr.dataset.sev === sevFilter || (sevFilter==="LOW" && tr.dataset.sev==="INFO");
+    const okQ = !q || tr.dataset.text.includes(q);
+    const show = okSev && okQ;
+    tr.style.display = show ? "" : "none";
+    if (!show) tr.nextElementSibling.classList.remove("open");
+    if (show) visible++;
+  });
+  document.getElementById("empty").style.display = visible ? "none" : "block";
+}
+</script>
+</body></html>
