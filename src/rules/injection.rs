@@ -3,6 +3,7 @@
 use super::{RuleCtx, RuleDef, RuleMeta};
 use crate::findings::{Confidence, Finding, Severity};
 use crate::parser::{call_args, call_name, creation_type, is_dynamic_concat, receiver_text};
+use crate::trust;
 
 pub fn register(rules: &mut Vec<RuleDef>) {
     rules.push(RuleDef {
@@ -120,6 +121,41 @@ fn looks_like_sql(text: &str) -> bool {
         .any(|kw| upper.contains(kw))
 }
 
+/// Does this SQL text carry JDBC bind placeholders?
+///
+/// Concatenation into a query string is only a finding when the *values* are
+/// concatenated. A query assembled from constants and column names but with
+/// every value bound through `?` is the correct pattern, and it is extremely
+/// common: DAOs build `where` clauses dynamically and pass the values as a
+/// separate parameter array. Counting only placeholders that sit outside
+/// string content we already know is dynamic keeps this cheap and textual.
+fn has_bind_placeholders(text: &str) -> bool {
+    // `?` inside a string literal in the source ("... = ?") is the placeholder;
+    // `?` as a Java ternary operator always has surrounding whitespace and no
+    // quotes, so require the character to appear within a quoted run.
+    let mut in_string = false;
+    let mut prev_escape = false;
+    for ch in text.chars() {
+        match ch {
+            '\\' if in_string => prev_escape = !prev_escape,
+            '"' if !prev_escape => in_string = !in_string,
+            '?' if in_string => return true,
+            _ => prev_escape = false,
+        }
+    }
+    false
+}
+
+/// Does this code bind values onto a `PreparedStatement`?
+fn binds_parameters(scope: &str) -> bool {
+    const SETTERS: &[&str] = &[
+        ".setString(", ".setInt(", ".setLong(", ".setObject(", ".setDouble(",
+        ".setFloat(", ".setShort(", ".setBoolean(", ".setBytes(", ".setDate(",
+        ".setTimestamp(", ".setBigDecimal(", ".setNull(", ".setArray(",
+    ];
+    SETTERS.iter().any(|s| scope.contains(s))
+}
+
 fn check_sql_injection(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
     let mut out = Vec::new();
     for call in &ctx.index.method_invocations {
@@ -137,10 +173,51 @@ fn check_sql_injection(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
         if !is_sink {
             continue;
         }
-        let Some(arg) = call_args(*call).into_iter().next() else {
+        let args = call_args(*call);
+        let Some(arg) = args.first().copied() else {
             continue;
         };
         let arg_text = ctx.file.text(arg);
+        // Values bound through `?` alongside a concatenated skeleton is the
+        // *correct* pattern, and by far the most common shape in real DAOs:
+        // the `where` clause is assembled from column names while the values
+        // travel separately. Look for placeholders in the expression itself,
+        // then in the enclosing method (StringBuilder `.append(" and x = ?")`),
+        // then in the file (a `buildQuery` helper next door) — widening only
+        // while the sink call also receives the bound values as extra
+        // arguments, which is what makes the placeholders meaningful.
+        //
+        // A single-argument sink (`prepareStatement(sql)`, bound later via
+        // setX) keeps a finding, ranked below true concatenation of values.
+        let concat_severity = |ctx: &RuleCtx, expr: tree_sitter::Node| -> Option<Severity> {
+            if args.len() <= 1 {
+                if !has_bind_placeholders(ctx.file.text(expr)) {
+                    return Some(Severity::High);
+                }
+                // `prepareStatement(sql)` followed by `stmt.setString(1, v)` in
+                // the same method *is* the parameterized form; the values just
+                // arrive on a later statement.
+                let scope = crate::parser::enclosing_method(*call)
+                    .map(|m| ctx.file.text(m))
+                    .unwrap_or("");
+                return if binds_parameters(scope) {
+                    None
+                } else {
+                    Some(Severity::Medium)
+                };
+            }
+            let scope = crate::parser::enclosing_method(*call)
+                .map(|m| ctx.file.text(m))
+                .unwrap_or("");
+            if has_bind_placeholders(ctx.file.text(expr))
+                || has_bind_placeholders(scope)
+                || has_bind_placeholders(&ctx.file.source)
+            {
+                None
+            } else {
+                Some(Severity::High)
+            }
+        };
         if ctx.taint.expr_tainted(arg) {
             out.push(ctx.finding(
                 meta,
@@ -150,24 +227,30 @@ fn check_sql_injection(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
                 None,
             ));
         } else if is_dynamic_concat(ctx.file, arg) && looks_like_sql(arg_text) {
-            out.push(ctx.finding(
-                meta,
-                *call,
-                format!("SQL passed to `{name}()` is built with string concatenation; use bind parameters instead."),
-                Confidence::Medium,
-                Some(Severity::High),
-            ));
+            if let Some(sev) = concat_severity(ctx, arg) {
+                out.push(ctx.finding(
+                    meta,
+                    *call,
+                    format!("SQL passed to `{name}()` is built with string concatenation; use bind parameters instead."),
+                    Confidence::Medium,
+                    Some(sev),
+                ));
+            }
         } else if arg.kind() == "identifier" {
             // variable that was built via tainted concat is caught by taint;
             // check concat-built (but untainted) SQL vars too
             if let Some(decl) = find_declaration(ctx, arg) {
-                if is_dynamic_concat(ctx.file, decl) && looks_like_sql(ctx.file.text(decl)) {
+                let built = ctx.file.text(decl);
+                if !(is_dynamic_concat(ctx.file, decl) && looks_like_sql(built)) {
+                    continue;
+                }
+                if let Some(sev) = concat_severity(ctx, decl) {
                     out.push(ctx.finding(
                         meta,
                         *call,
                         format!("SQL passed to `{name}()` was built with string concatenation; use bind parameters instead."),
                         Confidence::Medium,
-                        Some(Severity::High),
+                        Some(sev),
                     ));
                 }
             }
@@ -177,22 +260,46 @@ fn check_sql_injection(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
 }
 
 /// Find the initializer expression for an identifier, if declared in this file.
+///
+/// Matching purely by name across the whole file attributes an unrelated
+/// method's `String sql = ...` to this use site. Prefer the nearest declaration
+/// that is in scope: same enclosing method and textually before the use;
+/// fall back to a field (declared outside any method) otherwise.
 fn find_declaration<'t>(
     ctx: &RuleCtx<'_, 't>,
     ident: tree_sitter::Node<'t>,
 ) -> Option<tree_sitter::Node<'t>> {
     let name = ctx.file.text(ident);
+    let use_offset = ident.start_byte();
+    let scope = crate::parser::enclosing_method(ident);
+    let mut local: Option<tree_sitter::Node<'t>> = None;
+    let mut field: Option<tree_sitter::Node<'t>> = None;
+
     for decl in &ctx.index.variable_declarators {
-        if let (Some(n), Some(v)) = (
+        let (Some(n), Some(v)) = (
             decl.child_by_field_name("name"),
             decl.child_by_field_name("value"),
-        ) {
-            if ctx.file.text(n) == name {
-                return Some(v);
+        ) else {
+            continue;
+        };
+        if ctx.file.text(n) != name {
+            continue;
+        }
+        let decl_scope = crate::parser::enclosing_method(*decl);
+        match (decl_scope, scope) {
+            // Local to the same method, declared before this use: take the
+            // latest such declaration (the one actually in effect).
+            (Some(d), Some(s)) if d.id() == s.id() && decl.start_byte() <= use_offset => {
+                if local.map(|p| p.start_byte() < decl.start_byte()).unwrap_or(true) {
+                    local = Some(v);
+                }
             }
+            // A field: usable from anywhere in the class.
+            (None, _) => field = field.or(Some(v)),
+            _ => {}
         }
     }
-    None
+    local.or(field)
 }
 
 fn check_command_injection(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
@@ -329,28 +436,41 @@ fn check_xpath_injection(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
 
 fn check_spel_injection(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
     let mut out = Vec::new();
+    // SpEL is only an RCE primitive when the expression is evaluated against a
+    // context that permits `T(...)` type references and constructor calls.
+    // `SimpleEvaluationContext` permits neither, so parsing untrusted text
+    // against it is a data-binding concern, not code execution.
+    let eval_context = trust::spel_context(ctx);
+    if eval_context == trust::SpelContext::Simple {
+        return out;
+    }
+
     for call in &ctx.index.method_invocations {
         if call_name(ctx.file, *call) != "parseExpression" {
             continue;
         }
-        if let Some(arg) = call_args(*call).into_iter().next() {
-            if ctx.taint.expr_tainted(arg) {
-                out.push(ctx.finding(
-                    meta,
-                    *call,
-                    "User-controlled data is parsed as a SpEL expression; this allows remote code execution.".into(),
-                    Confidence::High,
-                    None,
-                ));
-            } else if !crate::parser::is_constant_expr(ctx.file, arg) {
-                out.push(ctx.finding(
-                    meta,
-                    *call,
-                    "Dynamic (non-constant) expression parsed as SpEL; verify the input cannot be attacker-controlled.".into(),
-                    Confidence::Low,
-                    Some(Severity::Medium),
-                ));
-            }
+        let Some(arg) = call_args(*call).into_iter().next() else {
+            continue;
+        };
+        let source = trust::classify(ctx, arg);
+        if source == crate::findings::TrustSource::Network {
+            out.push(ctx.finding_from(
+                meta,
+                *call,
+                "User-controlled data is parsed as a SpEL expression; this allows remote code execution.".into(),
+                Confidence::High,
+                None,
+                source,
+            ));
+        } else if !crate::parser::is_constant_expr(ctx.file, arg) {
+            out.push(ctx.finding_from(
+                meta,
+                *call,
+                "Dynamic (non-constant) expression parsed as SpEL; verify the input cannot be attacker-controlled.".into(),
+                Confidence::Low,
+                Some(Severity::Medium),
+                source,
+            ));
         }
     }
     out

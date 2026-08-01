@@ -53,6 +53,7 @@ pub fn render(findings: &[Finding]) -> String {
                     "confidence": f.confidence.as_str(),
                     "cwe": f.cwe,
                     "owasp": f.owasp,
+                    "trustSource": f.source.as_str(),
                 }
             })
         })

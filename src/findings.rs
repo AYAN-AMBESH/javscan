@@ -33,6 +33,19 @@ impl Severity {
         }
     }
 
+    /// Move `n` steps down the severity ladder, saturating at `Info`.
+    pub fn step_down(&self, n: u8) -> Severity {
+        let ladder = [
+            Severity::Info,
+            Severity::Low,
+            Severity::Medium,
+            Severity::High,
+            Severity::Critical,
+        ];
+        let idx = ladder.iter().position(|s| s == self).unwrap_or(0);
+        ladder[idx.saturating_sub(n as usize)]
+    }
+
     /// SARIF level mapping.
     pub fn sarif_level(&self) -> &'static str {
         match self {
@@ -69,6 +82,78 @@ impl Confidence {
     }
 }
 
+/// Where the data reaching a dangerous API comes from.
+///
+/// A dangerous API is only a vulnerability if an attacker can reach it. This
+/// coarse classification lets rules keep firing on genuinely dangerous calls
+/// while ranking them by who can actually influence the input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TrustSource {
+    /// Attacker-controlled: HTTP request, socket, or anything the taint
+    /// engine traced back to a request source.
+    Network,
+    /// Files on the local filesystem — requires local write access first.
+    LocalFs,
+    /// Data from an installed plugin's own descriptor or classpath.
+    Plugin,
+    /// Data from a theme/template authored by an operator.
+    Theme,
+    /// Application configuration or environment.
+    Config,
+    /// A compile-time constant in the source itself.
+    Constant,
+    /// Could not be determined.
+    Unknown,
+}
+
+impl TrustSource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TrustSource::Network => "NETWORK",
+            TrustSource::LocalFs => "LOCAL_FS",
+            TrustSource::Plugin => "PLUGIN",
+            TrustSource::Theme => "THEME",
+            TrustSource::Config => "CONFIG",
+            TrustSource::Constant => "CONSTANT",
+            TrustSource::Unknown => "UNKNOWN",
+        }
+    }
+
+    /// How many severity steps to drop for this source. Only `Network` (and an
+    /// undetermined source, which may yet be network) keeps full severity.
+    pub fn severity_penalty(&self) -> u8 {
+        match self {
+            TrustSource::Network | TrustSource::Unknown => 0,
+            TrustSource::LocalFs | TrustSource::Plugin | TrustSource::Theme => 2,
+            TrustSource::Config => 2,
+            TrustSource::Constant => 3,
+        }
+    }
+
+    /// Human-readable note appended to the finding message.
+    pub fn note(&self) -> Option<&'static str> {
+        match self {
+            TrustSource::Network | TrustSource::Unknown => None,
+            TrustSource::LocalFs => {
+                Some("Trusted input: the data is read from the local filesystem, so an attacker needs local write access first.")
+            }
+            TrustSource::Plugin => {
+                Some("Trusted input: the data comes from an installed plugin, which is already trusted code.")
+            }
+            TrustSource::Theme => {
+                Some("Trusted input: the data comes from a theme/template authored by an operator.")
+            }
+            TrustSource::Config => {
+                Some("Trusted input: the data comes from application configuration.")
+            }
+            TrustSource::Constant => {
+                Some("Trusted input: the value is a compile-time constant in this source file.")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Finding {
     pub rule_id: String,
@@ -85,6 +170,13 @@ pub struct Finding {
     pub owasp: String,
     pub remediation: String,
     pub fingerprint: String,
+    /// Trust classification of the input reaching the flagged API.
+    #[serde(default = "default_source")]
+    pub source: TrustSource,
+}
+
+fn default_source() -> TrustSource {
+    TrustSource::Unknown
 }
 
 impl Finding {

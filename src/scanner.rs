@@ -3,9 +3,11 @@
 use crate::config::Config;
 use crate::findings::Finding;
 use crate::parser::{AstIndex, ParsedFile};
+use crate::project::ProjectContext;
 use crate::rules::{all_rules, RuleCtx, RuleDef};
 use crate::suppress;
 use crate::taint::TaintEngine;
+use crate::types::TypeIndex;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
@@ -35,7 +37,15 @@ const SKIP_DIRS: &[&str] = &[
 
 fn is_test_path(path: &Path) -> bool {
     let p = path.to_string_lossy().replace('\\', "/");
-    if p.contains("/src/test/") || p.contains("/test/java/") || p.contains("/androidTest/") {
+    // `/tests/` covers layouts that predate the Maven convention, e.g.
+    // OpenRefine's `extensions/<name>/tests/src/...`.
+    if p.contains("/src/test/")
+        || p.contains("/test/java/")
+        || p.contains("/androidTest/")
+        || p.contains("/tests/")
+        || p.contains("/test/")
+        || p.contains("/src/it/")
+    {
         return true;
     }
     let stem = path.file_stem().map(|s| s.to_string_lossy()).unwrap_or_default();
@@ -113,7 +123,12 @@ fn active_rules(disabled: &[String]) -> Vec<RuleDef> {
         .collect()
 }
 
-fn scan_one(path: &Path, rules: &[RuleDef], suppressed_counter: &AtomicUsize) -> (Vec<Finding>, usize, bool) {
+fn scan_one(
+    path: &Path,
+    rules: &[RuleDef],
+    project: &ProjectContext,
+    suppressed_counter: &AtomicUsize,
+) -> (Vec<Finding>, usize, bool) {
     let Ok(source) = std::fs::read_to_string(path) else {
         return (Vec::new(), 0, true);
     };
@@ -124,11 +139,14 @@ fn scan_one(path: &Path, rules: &[RuleDef], suppressed_counter: &AtomicUsize) ->
     };
     let index = AstIndex::build(&parsed);
     let taint = TaintEngine::new(&parsed);
+    let types = TypeIndex::build(&parsed, &index);
     let suppressions = suppress::collect(&parsed, &index);
     let ctx = RuleCtx {
         file: &parsed,
         index: &index,
         taint: &taint,
+        types: &types,
+        project,
     };
     let mut findings = Vec::new();
     for rule in rules {
@@ -147,17 +165,18 @@ pub fn scan(opts: &ScanOptions, _config: &Config) -> (Vec<Finding>, ScanStats) {
     let start = std::time::Instant::now();
     let files = discover_files(opts);
     let rules = active_rules(&opts.disabled_rules);
+    let project = ProjectContext::discover(&opts.paths);
     let suppressed = AtomicUsize::new(0);
 
     let results: Vec<(Vec<Finding>, usize, bool)> = if opts.parallel {
         files
             .par_iter()
-            .map(|f| scan_one(f, &rules, &suppressed))
+            .map(|f| scan_one(f, &rules, &project, &suppressed))
             .collect()
     } else {
         files
             .iter()
-            .map(|f| scan_one(f, &rules, &suppressed))
+            .map(|f| scan_one(f, &rules, &project, &suppressed))
             .collect()
     };
 

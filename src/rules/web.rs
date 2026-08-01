@@ -184,8 +184,28 @@ const SSRF_CLIENT_CALLS: &[&str] = &[
     "exchange",
     "openConnection",
     "openStream",
-    "connect",
 ];
+
+/// Types whose `openStream()` / `openConnection()` really does make a network
+/// request. `openStream` is also the Commons FileUpload API for reading an
+/// uploaded part, which is not an outbound request at all.
+const URL_TYPES: &[&str] = &["URL", "URI", "java.net.URL", "java.net.URI"];
+
+/// Is the receiver of an `openStream`/`openConnection` call a URL?
+///
+/// Returns false when the receiver resolves to some other declared type, and
+/// true when it resolves to a URL *or* cannot be resolved at all but the file
+/// imports `java.net.URL` — the latter keeps coverage for call chains like
+/// `new URL(s).openStream()` without firing on `fileItem.openStream()`.
+fn receiver_is_url(ctx: &RuleCtx, recv: tree_sitter::Node) -> bool {
+    match ctx.types.type_of(ctx.file, recv) {
+        Some(ty) => ctx.types.is_a(&ty, URL_TYPES),
+        None => {
+            let text = ctx.file.text(recv);
+            text.contains("new URL(") || text.contains("new URI(") || text.contains("toURL()")
+        }
+    }
+}
 
 fn check_ssrf(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
     let mut out = Vec::new();
@@ -229,7 +249,7 @@ fn check_ssrf(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
         if name == "openConnection" || name == "openStream" {
             // sink is the receiver URL itself
             if let Some(obj) = call.child_by_field_name("object") {
-                if ctx.taint.expr_tainted(obj) {
+                if receiver_is_url(ctx, obj) && ctx.taint.expr_tainted(obj) {
                     out.push(ctx.finding(
                         meta,
                         *call,
@@ -282,6 +302,13 @@ fn check_insecure_cookie(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
         let scope_text = enclosing_method(*creation)
             .map(|m| ctx.file.text(m).to_string())
             .unwrap_or_default();
+        // A `new Cookie(...)` that never reaches the client carries no flags
+        // to get wrong. Servlet code also builds Cookie objects to *send* on
+        // an outbound HTTP call (e.g. re-using a login session upstream);
+        // those are inputs to a client library, not Set-Cookie headers.
+        if !scope_text.contains("addCookie") && !scope_text.contains("Set-Cookie") {
+            continue;
+        }
         let missing_secure = !scope_text.contains("setSecure(true)");
         let missing_httponly = !scope_text.contains("setHttpOnly(true)");
         if missing_secure || missing_httponly {
@@ -367,6 +394,51 @@ fn check_permissive_cors(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
     out
 }
 
+/// Is this literal an argument to a string comparison (`startsWith`, `equals`,
+/// `contains`, …) or an operand of `==`/`!=`, rather than a URL being used?
+fn is_comparison_operand(ctx: &RuleCtx, lit: tree_sitter::Node) -> bool {
+    const COMPARISONS: &[&str] = &[
+        "startsWith", "endsWith", "equals", "equalsIgnoreCase", "contains",
+        "indexOf", "lastIndexOf", "matches", "replace", "replaceAll",
+        "replaceFirst", "split", "regionMatches", "compareTo",
+    ];
+    let mut cur = lit.parent();
+    while let Some(n) = cur {
+        match n.kind() {
+            "argument_list" | "parenthesized_expression" => cur = n.parent(),
+            "method_invocation" => {
+                return COMPARISONS.contains(&call_name(ctx.file, n));
+            }
+            "binary_expression" => {
+                let op = n
+                    .child_by_field_name("operator")
+                    .map(|o| ctx.file.text(o))
+                    .unwrap_or("");
+                return op == "==" || op == "!=";
+            }
+            _ => return false,
+        }
+    }
+    false
+}
+
+/// XML/RDF namespace URIs: opaque identifiers that happen to be spelled as
+/// http URLs and must be compared byte-for-byte.
+fn is_namespace_uri(url: &str) -> bool {
+    const NAMESPACE_HOSTS: &[&str] = &[
+        "www.wikidata.org/entity/",
+        "www.wikidata.org/prop/",
+        "rdf.freebase.com/",
+        "purl.org/",
+        "xmlns.com/",
+        "www.opengis.net/",
+        "www.openlinksw.com/",
+    ];
+    NAMESPACE_HOSTS.iter().any(|h| url.contains(h))
+        || url.ends_with('#')
+        || url.contains("/ns#")
+}
+
 fn check_cleartext_http(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
     let mut out = Vec::new();
     const ALLOWED: &[&str] = &[
@@ -380,6 +452,23 @@ fn check_cleartext_http(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
             continue;
         }
         if ALLOWED.iter().any(|a| inner.contains(a)) {
+            continue;
+        }
+        // A bare scheme with no host is never an endpoint. It is the argument
+        // to `url.startsWith("http://")` or the prefix in `"http://" + host` —
+        // scheme *handling*, which is what code that upgrades to HTTPS looks
+        // like, not a hardcoded cleartext destination.
+        if inner.trim_end_matches('/') == "http:" || inner == "http://" {
+            continue;
+        }
+        // Likewise when the literal is being compared rather than dialled.
+        if is_comparison_operand(ctx, *lit) {
+            continue;
+        }
+        // RDF/XML namespace URIs are identifiers, not fetch targets: they are
+        // defined to be compared verbatim, and "fixing" one to https breaks
+        // interoperability.
+        if is_namespace_uri(inner) {
             continue;
         }
         out.push(ctx.finding(

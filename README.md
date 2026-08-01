@@ -15,6 +15,49 @@ Sister project of [sapyscan](https://github.com/AYAN-AMBESH/sapyscan) (Python SA
 - **Baseline diffing**: snapshot existing findings, then fail CI only on *new* issues (fingerprints survive line-number shifts)
 - **Inline suppression** (`// nosec`, `// javscan:ignore JS101`), project config file, severity/confidence levels, configurable exit codes
 - Auto-skips test sources (`src/test`, `*Test.java`) and build/generated directories
+- **Type-aware sink matching** and **trust-boundary tagging** (see below) — a dangerous *name* is not treated as a dangerous *call*
+
+## Precision: type resolution and trust boundaries
+
+Name-only matching is the dominant source of SAST false positives. javscan
+resolves three things before it reports:
+
+**1. The receiver's type, not its name.** `.load()` only fires when the
+receiver actually resolves to `org.yaml.snakeyaml.Yaml`. Hardened wrappers
+(`YamlProcessor`, `YamlPropertySourceLoader` and their subclasses) build their
+parser with a `SafeConstructor` and are allow-listed. The construction site is
+inspected per-variable, so `new Yaml(new SafeConstructor(...))` is silent while
+`new Yaml(new Constructor(...))` is CRITICAL. Where a `pom.xml`/`build.gradle`
+declares SnakeYAML >= 2.0 — which rejects global type tags by default — a bare
+`new Yaml()` drops to INFO.
+
+**2. The method's owner, not its name.**
+`SecurityJackson2Modules.enableDefaultTyping(mapper)` installs an allow-list
+`PolymorphicTypeValidator`; it is a different symbol from
+`ObjectMapper#enableDefaultTyping` and is not reported.
+`activateDefaultTyping(...)` with a real validator is INFO ("confirm the
+allow-list scope"); with `LaissezFaireSubTypeValidator`, CRITICAL.
+
+**3. The value, not the identifier.** `hardcoded-secret` requires the *value*
+to look like key material. Names whose segments denote a role — `*_TYPE`,
+`*_PREFIX`, `*_REGEX`, `*_REASON`, `*_HEADER`, … — are domain nouns, not
+credential claims. URIs, regexes, namespace prefixes, label vocabulary
+(`Opaque`, `Bearer`) and lowercase word phrases are rejected regardless of
+entropy; long high-entropy strings and mixed-character-class passwords are
+reported.
+
+**Trust source.** Every finding carries a `source` tag —
+`NETWORK`, `LOCAL_FS`, `PLUGIN`, `THEME`, `CONFIG`, `CONSTANT` or `UNKNOWN`.
+Only `NETWORK` (and `UNKNOWN`, which may yet be network) keeps full severity;
+the others drop two or three steps and carry a note explaining why. A dangerous
+API reading a file this same class serialized with `ObjectOutputStream` is a
+self-serialized round trip: still reported, but LOW, because poisoning it
+requires local write access first. SpEL evaluated against a
+`SimpleEvaluationContext` — which forbids the `T(...)` type references and
+constructor calls SpEL RCE needs — is not reported at all.
+
+`tests/regression.rs` pins each of these as a golden fixture, positive and
+negative, so a precision fix cannot silently become a recall regression.
 
 ## Rules
 
@@ -126,6 +169,13 @@ CLI flags override the config file.
 4. **Sinks** are rule-specific (SQL execute, `Runtime.exec`, response writers, file constructors, ...). A tainted sink argument yields a high-confidence finding; dynamic-but-unproven concatenation yields a medium/low-confidence one at reduced severity.
 
 Analysis is intraprocedural (per method) with heuristic call propagation — the classic SAST precision/recall tradeoff at high scan speed.
+
+Taint answers *"is this attacker-controlled?"*, which is not the same as *"is
+this safe?"* — an untainted value may still come from a local file, a plugin
+descriptor or a theme template. The trust-source classifier fills that gap for
+rules whose sink is dangerous regardless of the caller (native deserialization,
+SpEL, reflection), so those findings are ranked by reachability rather than
+suppressed or left at CRITICAL.
 
 ## Example
 

@@ -46,6 +46,8 @@ pub struct AstIndex<'t> {
     pub method_declarations: Vec<Node<'t>>,
     pub class_declarations: Vec<Node<'t>>,
     pub line_comments: Vec<Node<'t>>,
+    pub imports: Vec<Node<'t>>,
+    pub formal_parameters: Vec<Node<'t>>,
 }
 
 impl<'t> AstIndex<'t> {
@@ -59,6 +61,8 @@ impl<'t> AstIndex<'t> {
             method_declarations: Vec::new(),
             class_declarations: Vec::new(),
             line_comments: Vec::new(),
+            imports: Vec::new(),
+            formal_parameters: Vec::new(),
         };
         let mut stack = vec![file.tree.root_node()];
         while let Some(node) = stack.pop() {
@@ -71,8 +75,12 @@ impl<'t> AstIndex<'t> {
                 "method_declaration" | "constructor_declaration" => {
                     idx.method_declarations.push(node)
                 }
-                "class_declaration" => idx.class_declarations.push(node),
+                "class_declaration" | "interface_declaration" | "record_declaration" => {
+                    idx.class_declarations.push(node)
+                }
                 "line_comment" | "block_comment" => idx.line_comments.push(node),
+                "import_declaration" => idx.imports.push(node),
+                "formal_parameter" | "spread_parameter" => idx.formal_parameters.push(node),
                 _ => {}
             }
             for i in (0..node.child_count()).rev() {
@@ -113,6 +121,38 @@ pub fn creation_type<'t>(file: &'t ParsedFile, node: Node<'t>) -> &'t str {
     node.child_by_field_name("type")
         .map(|n| file.text(n))
         .unwrap_or("")
+}
+
+/// Declared type text of a `variable_declarator`, taken from the enclosing
+/// `local_variable_declaration` / `field_declaration`.
+pub fn declarator_type<'t>(file: &'t ParsedFile, decl: Node<'t>) -> Option<&'t str> {
+    decl.parent()
+        .filter(|p| {
+            matches!(
+                p.kind(),
+                "local_variable_declaration" | "field_declaration" | "constant_declaration"
+            )
+        })
+        .and_then(|p| p.child_by_field_name("type"))
+        .map(|t| file.text(t))
+}
+
+/// Modifier keywords and annotations attached to a declaration, e.g.
+/// `["public", "static", "final"]`.
+pub fn modifiers<'t>(file: &'t ParsedFile, node: Node<'t>) -> Vec<&'t str> {
+    let mut out = Vec::new();
+    for i in 0..node.child_count() {
+        let Some(c) = node.child(i) else { continue };
+        if c.kind() != "modifiers" {
+            continue;
+        }
+        for j in 0..c.child_count() {
+            if let Some(m) = c.child(j) {
+                out.push(file.text(m));
+            }
+        }
+    }
+    out
 }
 
 /// Walk up to the enclosing method or constructor declaration.

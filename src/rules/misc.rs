@@ -43,6 +43,49 @@ fn redos_re() -> &'static Regex {
     })
 }
 
+/// Nested quantifiers only backtrack catastrophically when the two levels can
+/// match the *same* input — `(a+)+`. When the outer group begins with a
+/// mandatory literal that the inner quantified atom cannot match, each
+/// repetition is anchored to that separator and there is exactly one way to
+/// split the input: `(/[A-Za-z]+)*` is linear, not exponential.
+///
+/// Detects that shape by checking whether every quantified group starts with a
+/// literal separator absent from the group's remaining character classes.
+fn is_ambiguous(pattern: &str) -> bool {
+    for (start, _) in pattern.match_indices('(') {
+        let Some(rel_end) = pattern[start..].find(')') else {
+            continue;
+        };
+        let end = start + rel_end;
+        // Only groups that are themselves quantified can nest.
+        let quantified = pattern[end + 1..]
+            .chars()
+            .next()
+            .is_some_and(|c| c == '+' || c == '*' || c == '{');
+        if !quantified {
+            continue;
+        }
+        let body = &pattern[start + 1..end];
+        let body = body.strip_prefix("?:").unwrap_or(body);
+        // Leading mandatory literal: a plain character that is not a
+        // metacharacter and is not itself quantified.
+        let mut chars = body.chars();
+        let Some(first) = chars.next() else { continue };
+        if "[](){}.*+?^$|\\".contains(first) {
+            return true; // starts with a class/escape — assume ambiguous
+        }
+        if chars.clone().next().is_some_and(|c| "*?{".contains(c)) {
+            return true; // the leading literal is itself optional
+        }
+        // Unambiguous only if the separator cannot recur inside the rest.
+        if !chars.as_str().contains(first) {
+            continue;
+        }
+        return true;
+    }
+    false
+}
+
 const REGEX_SINKS: &[&str] = &["compile", "matches", "replaceAll", "replaceFirst", "split"];
 
 fn check_redos(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
@@ -62,7 +105,7 @@ fn check_redos(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
             continue;
         }
         let pattern = ctx.file.text(arg).trim_matches('"');
-        if pattern.len() > 4 && redos_re().is_match(pattern) {
+        if pattern.len() > 4 && redos_re().is_match(pattern) && is_ambiguous(pattern) {
             out.push(ctx.finding(
                 meta,
                 *call,
@@ -98,12 +141,17 @@ fn check_reflection(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
                 None,
             ));
         } else if !crate::parser::is_constant_expr(ctx.file, arg) {
-            out.push(ctx.finding(
+            // A class name that comes from a plugin descriptor or the local
+            // filesystem is not attacker-reachable in the way a request
+            // parameter is; tag the source so the severity reflects that.
+            let source = crate::trust::classify(ctx, arg);
+            out.push(ctx.finding_from(
                 meta,
                 *call,
                 format!("Dynamic class name passed to `{name}()`; verify it cannot be attacker-controlled."),
                 Confidence::Low,
                 Some(Severity::Low),
+                source,
             ));
         }
     }

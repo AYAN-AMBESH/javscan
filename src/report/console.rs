@@ -1,4 +1,4 @@
-use crate::findings::{Finding, Severity};
+use crate::findings::{Finding, Severity, TrustSource};
 use crate::scanner::ScanStats;
 use colored::Colorize;
 
@@ -28,6 +28,10 @@ pub fn print(findings: &[Finding], stats: &ScanStats, baseline_suppressed: usize
             println!();
             println!("  {}", current_file.underline().bold());
         }
+        let source = match f.source {
+            TrustSource::Unknown => String::new(),
+            s => format!(", source {}", s.as_str()),
+        };
         println!(
             "  {}:{}  {}  {} [{}] {}",
             f.line.to_string().dimmed(),
@@ -35,7 +39,7 @@ pub fn print(findings: &[Finding], stats: &ScanStats, baseline_suppressed: usize
             sev_colored(f.severity),
             f.rule_id.bold(),
             f.rule_name,
-            format!("({} confidence, {})", f.confidence.as_str(), f.cwe).dimmed(),
+            format!("({} confidence, {}{})", f.confidence.as_str(), f.cwe, source).dimmed(),
         );
         println!("      {}", f.message);
         println!("      {}", format!("> {}", f.snippet).dimmed());

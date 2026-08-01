@@ -144,8 +144,58 @@ impl<'f> TaintEngine<'f> {
                 break;
             }
         }
+        for v in self.regex_validated(method) {
+            set.remove(&v);
+        }
         self.cache.borrow_mut().insert(method.id(), set.clone());
         set
+    }
+
+    /// Variables checked against a whole-string regex inside this method:
+    /// `pattern.matcher(cb).matches()` or `cb.matches("[a-zA-Z0-9_]+")`.
+    ///
+    /// `matches()` anchors at both ends, so a developer who writes it has
+    /// declared the accepted alphabet — the same evidence a human reviewer
+    /// accepts when deciding a reflected value is safe. `find()` and
+    /// `lookingAt()` are deliberately excluded: they match a substring and
+    /// validate nothing.
+    fn regex_validated(&self, method: Node) -> Vec<String> {
+        let file = self.file;
+        let mut out = Vec::new();
+        let mut stack = vec![method];
+        while let Some(n) = stack.pop() {
+            if n.kind() == "method_invocation"
+                && n.child_by_field_name("name").map(|x| file.text(x)) == Some("matches")
+            {
+                // `<pattern>.matcher(v).matches()`
+                if let Some(inner) = n.child_by_field_name("object") {
+                    if inner.kind() == "method_invocation"
+                        && inner.child_by_field_name("name").map(|x| file.text(x)) == Some("matcher")
+                    {
+                        for a in crate::parser::call_args(inner) {
+                            if a.kind() == "identifier" {
+                                out.push(file.text(a).to_string());
+                            }
+                        }
+                    } else if inner.kind() == "identifier" {
+                        // `v.matches("regex")` — only a literal pattern counts.
+                        let literal_pattern = crate::parser::call_args(n)
+                            .first()
+                            .map(|a| a.kind() == "string_literal")
+                            .unwrap_or(false);
+                        if literal_pattern {
+                            out.push(file.text(inner).to_string());
+                        }
+                    }
+                }
+            }
+            for i in (0..n.child_count()).rev() {
+                if let Some(c) = n.child(i) {
+                    stack.push(c);
+                }
+            }
+        }
+        out
     }
 
     fn initial_params(&self, method: Node) -> HashSet<String> {
@@ -159,10 +209,6 @@ impl<'f> TaintEngine<'f> {
         let is_handler = method_annotations
             .iter()
             .any(|a| HANDLER_ANNOTATIONS.contains(&a.as_str()));
-        let is_servlet_entry = matches!(
-            method_name,
-            "doGet" | "doPost" | "doPut" | "doDelete" | "service" | "doFilter"
-        );
         let is_main = method_name == "main";
 
         let Some(params) = method.child_by_field_name("parameters") else {
@@ -186,10 +232,12 @@ impl<'f> TaintEngine<'f> {
                 .iter()
                 .any(|a| PARAM_SOURCE_ANNOTATIONS.contains(&a.as_str()));
             let request_typed = ptype.contains("HttpServletRequest");
+            // No separate servlet-entry clause: an HttpServletRequest
+            // parameter is a source wherever it appears, doGet/doPost included,
+            // which `request_typed` already covers.
             if annotated_source
                 || request_typed
                 || (is_handler && !ptype.contains("HttpServletResponse") && !ptype.contains("Model"))
-                || (is_servlet_entry && request_typed)
                 || (is_main && ptype.contains("String"))
             {
                 set.insert(pname);

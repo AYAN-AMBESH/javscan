@@ -3,7 +3,7 @@
 
 use super::{RuleCtx, RuleDef, RuleMeta};
 use crate::findings::{Confidence, Finding, Severity};
-use crate::parser::{call_args, call_name, creation_type, descendants, enclosing_method, receiver_text};
+use crate::parser::{call_args, call_name, creation_type, enclosing_method, receiver_text};
 
 pub fn register(rules: &mut Vec<RuleDef>) {
     rules.push(RuleDef {
@@ -185,6 +185,44 @@ const SECURITY_HINTS: &[&str] = &[
     "nonce", "iv", "auth", "csrf", "reset", "captcha", "verif",
 ];
 
+/// Split source text into lowercase identifier words, breaking on
+/// non-alphanumerics *and* camelCase humps: `getSessionToken()` becomes
+/// `["get", "session", "token"]`.
+pub fn identifier_words(text: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut cur = String::new();
+    let mut prev_lower = false;
+    for ch in text.chars() {
+        if ch.is_ascii_alphanumeric() {
+            if ch.is_ascii_uppercase() && prev_lower && !cur.is_empty() {
+                words.push(std::mem::take(&mut cur));
+            }
+            cur.push(ch.to_ascii_lowercase());
+            prev_lower = ch.is_ascii_lowercase() || ch.is_ascii_digit();
+        } else if !cur.is_empty() {
+            words.push(std::mem::take(&mut cur));
+            prev_lower = false;
+        }
+    }
+    if !cur.is_empty() {
+        words.push(cur);
+    }
+    words
+}
+
+/// Does the surrounding code mention a security concept?
+///
+/// The hint list holds short fragments (`iv`, `key`, `otp`), so a plain
+/// substring test matched inside unrelated words: `private` contains `iv`,
+/// which promoted every `private` method holding a `new Random()` to HIGH.
+/// Match whole identifier words instead, so `iv` hits `iv`/`ivBytes` but not
+/// `private`.
+pub fn contains_security_hint(text: &str) -> bool {
+    identifier_words(text)
+        .iter()
+        .any(|w| SECURITY_HINTS.iter().any(|h| w.starts_with(h)))
+}
+
 fn check_weak_random(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
     let mut out = Vec::new();
     let mut flag = |node: tree_sitter::Node, what: &str| {
@@ -196,9 +234,8 @@ fn check_weak_random(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
                     .unwrap_or("");
                 format!("{name} {}", ctx.file.text(m))
             })
-            .unwrap_or_default()
-            .to_lowercase();
-        let security_context = SECURITY_HINTS.iter().any(|h| context_text.contains(h));
+            .unwrap_or_default();
+        let security_context = contains_security_hint(&context_text);
         let (sev, conf, extra) = if security_context {
             (
                 Some(Severity::High),
@@ -237,11 +274,20 @@ fn check_hardcoded_key(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
             continue;
         }
         let args = call_args(*creation);
-        let has_literal = args.iter().any(|a| {
-            !descendants(*a, &|n| n.kind() == "string_literal").is_empty()
-                || matches!(a.kind(), "array_initializer" | "array_creation_expression")
-        });
-        if has_literal {
+        // Only the key-material argument matters. Every one of these
+        // constructors also takes a *non-secret* string: the algorithm name
+        // ("AES", "HmacSHA256"). Scanning all arguments for a nested literal
+        // therefore fired on every construction, including
+        // `new SecretKeySpec(secureRandomBytes(32), "AES")`.
+        let material_index = match ty {
+            // GCMParameterSpec(tagLenBits, iv) — the nonce is the second arg.
+            "GCMParameterSpec" => 1,
+            _ => 0,
+        };
+        let Some(material) = args.get(material_index) else {
+            continue;
+        };
+        if is_hardcoded_material(ctx, *material) {
             let what = match ty {
                 "IvParameterSpec" | "GCMParameterSpec" => "IV/nonce",
                 "PBEKeySpec" => "PBE password",
@@ -257,6 +303,39 @@ fn check_hardcoded_key(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {
         }
     }
     out
+}
+
+/// Is this expression *itself* baked-in key material, rather than a value
+/// computed at runtime? Accepts literals, constant concatenations and literal
+/// byte arrays; rejects anything that ultimately comes from a call
+/// (`secret.getBytes()`, `randomBytes(32)`) or from a variable we cannot see.
+fn is_hardcoded_material(ctx: &RuleCtx, expr: tree_sitter::Node) -> bool {
+    match expr.kind() {
+        "string_literal" => true,
+        // `"abc".getBytes()` / `"abc".toCharArray()` is still a literal key.
+        "method_invocation" => match expr.child_by_field_name("object") {
+            Some(obj) => is_hardcoded_material(ctx, obj),
+            None => false,
+        },
+        "array_initializer" => true,
+        // `new byte[] { 1, 2, 3 }` is hardcoded; `new byte[32]` is a zero-filled
+        // buffer that gets populated later, so it is not evidence on its own.
+        "array_creation_expression" => expr
+            .child_by_field_name("value")
+            .map(|v| v.kind() == "array_initializer")
+            .unwrap_or(false),
+        "parenthesized_expression" | "cast_expression" => expr
+            .named_child(expr.named_child_count().saturating_sub(1))
+            .map(|c| is_hardcoded_material(ctx, c))
+            .unwrap_or(false),
+        "binary_expression" => crate::parser::is_constant_expr(ctx.file, expr),
+        // A local/field initialised from a literal in this file.
+        "identifier" => match ctx.types.init_of(ctx.file, expr) {
+            Some(init) => is_hardcoded_material(ctx, init),
+            None => false,
+        },
+        _ => false,
+    }
 }
 
 fn check_trust_all_tls(ctx: &RuleCtx, meta: &RuleMeta) -> Vec<Finding> {

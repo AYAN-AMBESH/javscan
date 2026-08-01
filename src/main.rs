@@ -1,16 +1,7 @@
-mod baseline;
-mod config;
-mod findings;
-mod parser;
-mod report;
-mod rules;
-mod scanner;
-mod suppress;
-mod taint;
-
 use clap::{Parser, ValueEnum};
 use colored::Colorize;
-use findings::Severity;
+use javscan::findings::Severity;
+use javscan::{baseline, config, report, scanner};
 use std::path::PathBuf;
 use std::process::ExitCode;
 

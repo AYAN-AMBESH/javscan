@@ -41,10 +41,11 @@ pub fn render(findings: &[Finding], stats: &ScanStats) -> String {
 <div class="detailbox">
 <p>{msg}</p>
 <pre>{snippet}</pre>
-<p class="meta"><b>{cwe}</b> · {owasp} · fingerprint <span class="mono">{fp}</span></p>
+<p class="meta"><b>{cwe}</b> · {owasp} · input source <b>{source}</b> · fingerprint <span class="mono">{fp}</span></p>
 <p class="fix"><b>Fix:</b> {fix}</p>
 </div></td></tr>"#,
             sev = sev,
+            source = f.source.as_str(),
             search = esc(&format!("{} {} {} {}", f.rule_id, f.rule_name, f.file, f.message).to_lowercase()),
             i = i,
             id = esc(&f.rule_id),

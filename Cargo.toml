@@ -8,6 +8,14 @@ repository = "https://github.com/AYAN-AMBESH/javscan"
 keywords = ["security", "sast", "java", "static-analysis", "taint-analysis"]
 categories = ["command-line-utilities", "development-tools"]
 
+[lib]
+name = "javscan"
+path = "src/lib.rs"
+
+[[bin]]
+name = "javscan"
+path = "src/main.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
